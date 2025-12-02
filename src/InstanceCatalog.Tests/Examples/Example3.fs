@@ -113,7 +113,7 @@ module Example3 =
 
 
     //  Now, let's see what we can do to implement it for this...
-    let pick = forType<command> ()
+    let pick = getIndex<command> ()
 
     type StringWriter() =
         let sb = new StringBuilder()

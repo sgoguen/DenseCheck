@@ -16,10 +16,10 @@
     <Compile Include="GodelianToolkit.fs" />
     <Compile Include="MetaFSharp.fs" />
     <Compile Include="AutoConstructor.fs" />
-    <Compile Include="Example1.fs" />
-    <Compile Include="Example2.fs" />
-    <Compile Include="Example3.fs" />
-    <Compile Include="Example4.fs" />
+    <Compile Include="Examples/Example1.fs" />
+    <Compile Include="Examples\Example2.fs" />
+    <Compile Include="Examples\Example3.fs" />
+    <Compile Include="Examples\Example4.fs" />
     <Compile Include="Tests.fs" />
   </ItemGroup>
 

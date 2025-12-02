@@ -1,4 +1,4 @@
-module EverythingIsFS.Nat
+module InstanceCatalog.Nat
 
 type Nat = bigint
 

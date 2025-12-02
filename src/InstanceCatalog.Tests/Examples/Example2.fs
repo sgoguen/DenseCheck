@@ -16,7 +16,7 @@ type Term =
 
 
 //  Now, let's see what we can do to implement it for this...
-let pick = forType<Term> ()
+let pick = getIndex<Term> ()
 
 let testIt () =
     for i in 0I .. 100I do

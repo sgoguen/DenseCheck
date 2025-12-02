@@ -1,4 +1,4 @@
-module EverythingIsFS.ComputationExpressions
+module InstanceCatalog.ComputationExpressions
 
 (*
 This module explores how we can construct a computation expression

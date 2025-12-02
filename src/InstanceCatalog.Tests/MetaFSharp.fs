@@ -1,8 +1,8 @@
-namespace EverythingIsFS
+namespace InstanceCatalog
 
-open EverythingIsFS
+open InstanceCatalog
 
-module MetaFSharp =
+module InstanceCatalog =
 
     open FSharp.Reflection
     open GodelianTooklit
@@ -536,6 +536,13 @@ module MetaFSharp =
     let makeConstructor = memoizeRec createCountable
 
     /// The public API: automatically create a Gödelian constructor for type 'T.
-    let createGodelianConstructorFor<'T> () : bigint -> 'T =
+    let getIndex<'T> () : bigint -> 'T =
         let cons = makeConstructor (typeof<'T>)
         fun n -> cons.Decode n |> unbox<'T>
+
+    let sample<'T> (pageSize: int) (pageIndex: int) : 'T list =
+        let cons = makeConstructor (typeof<'T>)
+        let startIdx = (bigint pageIndex) * (bigint pageSize)
+        let endIdx = startIdx + bigint pageSize - 1I
+        [ for i in startIdx .. endIdx -> cons.Decode i |> unbox<'T> ]
+        

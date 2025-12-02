@@ -1,8 +1,8 @@
-namespace EverythingIsFS
+namespace InstanceCatalog
 
 open System.Collections.Generic
 open System.Text
-open EverythingIsFS.MetaFSharp
+open InstanceCatalog.InstanceCatalog
 open Xunit
 
 module Example4 =
@@ -14,7 +14,7 @@ module Example4 =
             | And of boolean Set  //  This is not supported
             | Or of boolean list 
 
-    let pick = createGodelianConstructorFor<boolean> ()
+    let pick = getIndex<boolean> ()
 
     [<Fact>]
     let ``First 1000 should be distinct`` () =
@@ -33,7 +33,7 @@ module Example4 =
         | Lookup of Map<string, expr>  // Map support!
         | Add of expr * expr
 
-    let pickExpr = createGodelianConstructorFor<expr> ()
+    let pickExpr = getIndex<expr> ()
 
     [<Fact>]
     let ``First 1000 expressions should be distinct`` () =
@@ -59,7 +59,7 @@ module Example4 =
             | Tuple of FsType list
             | Record of Map<string, FsType>
             
-    let pickType = createGodelianConstructorFor<FsType> ()
+    let pickType = getIndex<FsType> ()
     
     [<Fact(Skip = "Taking too long")>]
     let ``First 1000 types should be distinct`` () =

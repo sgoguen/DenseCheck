@@ -1,9 +1,9 @@
-module EverythingIsFS.AutoConstructor
+module InstanceCatalog.AutoConstructor
 
 open GodelianTooklit
 
     
-open MetaFSharp
+open InstanceCatalog
         
     //  What we want to do is create an algebraic specification for this language that tightens the
     //  space so we're not creating these duplicate and redundant terms in the first place using 

@@ -1,4 +1,4 @@
-namespace EverythingIsFS
+namespace InstanceCatalog
 
 module GodelianTooklit =
 

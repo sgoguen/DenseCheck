@@ -1,4 +1,4 @@
-module EverythingIsFS.Pairing
+module InstanceCatalog.Pairing
 
 open System.Numerics
 

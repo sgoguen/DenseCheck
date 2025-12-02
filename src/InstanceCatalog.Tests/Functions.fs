@@ -1,4 +1,4 @@
-module EverythingIsFS.Functions
+module InstanceCatalog.Functions
 
 
 /// <summary>
