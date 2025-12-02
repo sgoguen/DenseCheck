@@ -4,11 +4,13 @@ If you’ve read Scott Wlaschin’s *Domain Modeling Made Functional*, the title
 
 But recently, I’ve been obsessed with a specific question: **If our types are just sets of values, why can't we index them?**
 
-Mathematically, most domain models we build—discriminated unions, records, optional types—are countably infinite sets. There is no deep mystery preventing us from saying, "Give me the 42nd value of this type." Yet, our testing tools rarely leverage this. We rely on property-based testing to throw random darts at our types, hoping to hit edge cases, and then we rely on "shrinkers" to make sense of the mess.
+Most domain models we build are discriminated unions, records, optional types. They tend to live in a countable space of values. There is no deep mystery preventing us from saying, "Give me the 42nd value of this type." Yet, our testing tools rarely leverage this. We rely on property-based testing to throw random darts at our types, hoping to hit edge cases, and then we rely on "shrinkers" to make sense of the mess.
 
 I wanted something different. I wanted to systematically walk the territory of my domain, one step at a time.
 
-So I built a library called **DenseCheck**. It creates a bijective mapping between your F\# types and the natural numbers. It turns your domain model into a catalog of values that you can browse by index.  It works for primitives, records, discriminated unions, options, lists, sets, maps and even recursive types.
+So I built a library called **DenseCheck**. It creates a bijective mapping between your F\# types and the natural numbers. It turns your domain model into a catalog of values that you can browse by index.
+
+**TL;DR:** DenseCheck takes an F# type and gives you a function `bigint -> 'T` that enumerates its values in a dense, repeatable order.  It works for primitives, records, discriminated unions, options, lists, sets, maps, and even recursive types.
 
 ## The Problem with Randomness
 
@@ -34,7 +36,7 @@ type AccessRule =
 If we use a random generator (like FsCheck), it might hand us a rule like:
 `Or(And(HasRole Admin, Allow), Not(HasRole Admin))`
 
-While this example isn't that complex, a random generator might produce a more convoluted expression that's more difficult to analyze.  You have to hope the quick check shrinker can whittle it down to the root cause.
+While this example isn't that complex, a random generator will happily produce much more convoluted expressions that are harder to reason about, or it may never find this bug at all.  You have to hope the quick check shrinker can whittle it down to the root cause.
 
 ## The DenseCheck Approach
 
@@ -124,7 +126,7 @@ This is the exact mathematical definition of a tautology. We didn't need to shri
 
 ## When AI Fails to Help
 
-Any programmers are relying on AI to write a lot of code these days and I don't know about you, but I've been find that people often do not notice when AI generates code that has subtle logical flaws.
+Many programmers are relying on AI to write a lot of code these days, and I don't know about you, but I've been finding that people often don’t notice when AI generates code with subtle logical flaws.
 
 For example, I asked an AI to generate a simplify function that would reduce AccessRules to their simplest form. The AI produced this code:
 
@@ -175,7 +177,7 @@ How do we know if it works or doesn't work?
 
 ## Checking Simplification with DenseCheck
 
-We can use `DenseCheck` to validate that our `simplify` function is correct, but we want to make sure we're doing two things:
+We can use `DenseCheck` to validate that our `simplify` function is correct, but we want to make sure we're doing three things:
 
 1. **Preservation of Semantics**: The simplified rule should behave the same as the original rule for all user contexts, otherwise, we've changed the meaning of the rule.
 2. **All Tautologies Simplify to 'Allow'**: Any rule that is a tautology should simplify to the `Allow` rule.
@@ -233,7 +235,7 @@ When I ran this, I found the AI accomplished preservation of semantics, but it f
 
 Clearly, it forgot that `Not Allow` is just `Deny` and `Not Deny` is just `Allow`.
 
-After adding those two rules, I get this:
+After I added those two rules, I got this:
 
 ```text
 --- Verifying Simplification ---
@@ -245,11 +247,11 @@ After adding those two rules, I get this:
 
 It looks like the AI forgot that `Or (A, Not A) = Allow` and `And (A, Not A) = Deny`.
 
-After, I added some more rules, I finally got zero failures for the first 1,000 rules!
+After I added some more rules, I finally got zero failures for the first 1,000 rules!
 
 ...but what about the first 10,000 rules, or 100,000?
 
-After, expanding my scan to 10,000 rules, I discovered a few more edge cases the AI missed:
+After expanding my scan to 10,000 rules, I discovered a few more edge cases the AI missed:
 
 ```text
 [4955] Found Complex Contradiction: And (Not (HasRole Admin), And (HasRole Admin, HasRole Admin))
@@ -268,16 +270,18 @@ It turns out the AI also forgot that `And (A, A) = A` and `Or (A, A) = A`.
 
 This approach shines when testing parsers, interpreters, serialization logic, et cetera.
 
-In property-based testing, if a specific seed crashes your parser, you have to hope you logged the seed to reproduce it. With `DenseCheck`, the "seed" is just the index.
+In property-based testing, if a specific seed crashes your parser, you have to hope you logged the seed to reproduce it. With `DenseCheck`, the "seed" is just the index. If index `5239I` crashes your parser, you can store exactly that index and reproduce the failure on any machine, any day, with no extra logging.
 
 ## When Not to Use DenseCheck
 
 While `DenseCheck` is a fun tool for generating tests data for smaller domain models, I think it's important to note its limitations.
 
-With DenseCheck, you're likely never doing exhaustive testing.  You're just testing what you've deemed to be "enough" for whatever your own purposes.  For any large or very complex domain, this type of testing will only scratch a very superficial surface found in small test cases, but sometimes those are the cases that end up getting missed!
+With DenseCheck, you're almost never doing exhaustive testing. You're testing what you've deemed to be "enough" for your purposes. For large or very complex domains, this only scratches the small-case surface.  However, those small cases are often exactly the ones that get missed.
 
-`DenseCheck` isn't a replacement for `FsCheck`.  I think random testing is essential for exploring the "deep" space of your domain where the index numbers would be too large to reach sequentially, but I wonder if DenseCheck might be a better random tester, or a just a nice companion to random testing.
+`DenseCheck` isn't a replacement for `FsCheck`.  I think random testing is essential for exploring the "deep" space of your domain where the index numbers would be too large to reach sequentially, and I see DenseCheck as a nice companion to random testing, and possibly a source of interesting deterministic seeds.
 
 ## Conclusion
 
-But if you find yourself being dense about something in your code, or your being dense about the AI generated code that you're tossing into your codebase, maybe enumerative testing ala `DenseCheck` is worth considering.
+But if you find yourself being dense about something in your code, or you're being too trusting of the AI-generated code you're tossing into your codebase, maybe enumerative testing à la `DenseCheck` is worth considering.
+
+Happy Advent of F# and Happy Holidays!
