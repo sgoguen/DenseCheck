@@ -545,4 +545,7 @@ module DenseCheck =
         let startIdx = (bigint pageIndex) * (bigint pageSize)
         let endIdx = startIdx + bigint pageSize - 1I
         [ for i in startIdx .. endIdx -> cons.Decode i |> unbox<'T> ]
-        
+
+    let getSetTo<'T when 'T: equality> (maxSize : int) =
+        sample<'T> maxSize 0 |> Set.ofList |> Set.toList
+
