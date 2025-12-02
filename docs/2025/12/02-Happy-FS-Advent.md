@@ -19,6 +19,9 @@ Let's look at a problem that is annoying to solve with random testing: **Access 
 We want to define a recursive set of rules. The danger in these systems is creating a tautology.  This is a rule that looks complex to a human reader but actually allows everyone in.
 
 ```fsharp
+
+#r "nuget: DenseCheck, 0.1.0"
+
 open DenseCheck
 
 // Our Domain
@@ -285,3 +288,9 @@ With DenseCheck, you're almost never doing exhaustive testing. You're testing wh
 But if you find yourself being dense about something in your code, or you're being too trusting of the AI-generated code you're tossing into your codebase, maybe enumerative testing à la `DenseCheck` is worth considering.
 
 Happy Advent of F# and Happy Holidays!
+
+## Update
+
+The NuGet package for DenseCheck is available [here](https://www.nuget.org/packages/DenseCheck).
+
+The source code is available in [02-FS-Advent.fsx](./02-FS-Advent.fsx)
