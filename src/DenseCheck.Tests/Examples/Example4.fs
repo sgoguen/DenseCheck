@@ -1,8 +1,8 @@
-namespace InstanceCatalog
+namespace DenseCheck
 
 open System.Collections.Generic
 open System.Text
-open InstanceCatalog.InstanceCatalog
+open DenseCheck.DenseCheck
 open Xunit
 
 module Example4 =

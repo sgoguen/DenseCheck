@@ -1,4 +1,4 @@
-module InstanceCatalog.ComputationExpressions
+module DenseCheck.ComputationExpressions
 
 (*
 This module explores how we can construct a computation expression

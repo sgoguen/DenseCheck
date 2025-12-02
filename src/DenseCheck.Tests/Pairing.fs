@@ -1,4 +1,4 @@
-module InstanceCatalog.Pairing
+module DenseCheck.Pairing
 
 open System.Numerics
 

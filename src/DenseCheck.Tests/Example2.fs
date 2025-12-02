@@ -1,6 +1,6 @@
-module InstanceCatalog.Example2
+module DenseCheck.Example2
 
-open InstanceCatalog.InstanceCatalog
+open DenseCheck.DenseCheck
 
 //  Consider this language
 type Term =
@@ -16,7 +16,7 @@ type Term =
 
 
 //  Now, let's see what we can do to implement it for this...
-let pick = getIndex<Term> ()
+let pick = forType<Term> ()
 
 let testIt () =
     for i in 0I .. 100I do

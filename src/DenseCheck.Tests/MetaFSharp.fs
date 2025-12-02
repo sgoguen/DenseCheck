@@ -1,8 +1,8 @@
-namespace InstanceCatalog
+namespace DenseCheck
 
-open InstanceCatalog
+open DenseCheck
 
-module InstanceCatalog =
+module DenseCheck =
 
     open FSharp.Reflection
     open GodelianTooklit

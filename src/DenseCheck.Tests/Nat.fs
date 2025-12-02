@@ -1,4 +1,4 @@
-module InstanceCatalog.Nat
+module DenseCheck.Nat
 
 type Nat = bigint
 

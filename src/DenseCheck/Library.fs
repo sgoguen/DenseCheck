@@ -1,4 +1,4 @@
-﻿namespace InstanceCatalog
+﻿namespace DenseCheck
 
 module Say =
     let hello name =

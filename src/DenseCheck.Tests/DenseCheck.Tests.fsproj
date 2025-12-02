@@ -31,7 +31,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\InstanceCatalog\InstanceCatalog.fsproj" />
+    <ProjectReference Include="..\DenseCheck\DenseCheck.fsproj" />
   </ItemGroup>
 
 </Project>

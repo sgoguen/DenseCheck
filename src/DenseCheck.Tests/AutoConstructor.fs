@@ -1,9 +1,9 @@
-module InstanceCatalog.AutoConstructor
+module DenseCheck.AutoConstructor
 
 open GodelianTooklit
 
     
-open InstanceCatalog
+open DenseCheck
         
     //  What we want to do is create an algebraic specification for this language that tightens the
     //  space so we're not creating these duplicate and redundant terms in the first place using 
