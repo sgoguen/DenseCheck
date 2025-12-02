@@ -22,8 +22,8 @@ module Example3 =
         | False (* constant [false] *)
         | Equal of expression * expression (* equal [e1 = e2] *)
         | Less of expression * expression (* less than [e1 < e2] *)
-        | And of boolean * boolean (* conjunction [b1 and b2] *)
-        | Or of boolean * boolean (* disjunction [b1 or b2] *)
+        | And of boolean Set (* conjunction [b1 and b2] *)
+        | Or of boolean Set (* disjunction [b1 or b2] *)
         | Not of boolean (* negation [not b] *)
 
     type command =
@@ -97,14 +97,26 @@ module Example3 =
             printExpression e1 p
             p.Print(" < ")
             printExpression e2 p
-        | And(b1, b2) ->
-            printBoolean b1 p
-            p.Print(" && ")
-            printBoolean b2 p
-        | Or(b1, b2) ->
-            printBoolean b1 p
-            p.Print(" || ")
-            printBoolean b2 p
+        | And(bs) ->
+            let first = ref true
+            p.Print("(")
+            for b1 in bs do
+                if !first then
+                    first := false
+                else
+                    p.Print(" && ")
+                printBoolean b1 p
+            p.Print(")")
+        | Or(bs) ->
+            let first = ref true
+            p.Print("(")
+            for b1 in bs do
+                if !first then
+                    first := false
+                else
+                    p.Print(" || ")
+                printBoolean b1 p
+            p.Print(")")
         | Not(b) ->
             p.Print("!")
             printBoolean b p
@@ -157,3 +169,12 @@ module Example3 =
             if added = false then
                 let foundAt = alreadyCreated[created]
                 Assert.Fail($"Duplicate {i} found at {foundAt} for object {created}")
+
+    [<Fact>]
+    let ``Print one big one`` () =
+        let bigIndex = 1234567890304982340732492340982349872234047I
+        let created = pick bigIndex
+        let code = toCode created
+        // Print to console for visual inspection
+        printfn "%s" code
+        Assert.True(code.Length > 0)
