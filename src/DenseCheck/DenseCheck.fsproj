@@ -6,7 +6,11 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <Compile Include="Library.fs" />
+    <Compile Include="Pairing.fs" />
+    <Compile Include="Functions.fs" />
+    <Compile Include="Nat.fs" />
+    <Compile Include="GodelianToolkit.fs" />
+    <Compile Include="MetaFSharp.fs" />
   </ItemGroup>
 
 </Project>
