@@ -1,7 +1,28 @@
-<Project Sdk="Microsoft.NET.Sdk">
+﻿<Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <!-- NuGet package metadata -->
+    <PackageId>DenseCheck</PackageId>
+    <Title>DenseCheck</Title>
+    <Version>0.1.0</Version>
+    <Authors>Stephen Goguen</Authors>
+    <Description>A .NET Testing Library for Systematic Property-Based Testing</Description>
+    <PackageTags>fsharp;functional;utilities</PackageTags>
+    <RepositoryUrl>https://github.com/sgoguen/DenseCheck</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <PackageProjectUrl>https://github.com/sgoguen/DenseCheck</PackageProjectUrl>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <PackageRequireLicenseAcceptance>false</PackageRequireLicenseAcceptance>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+
+    <!-- Symbols + SourceLink -->
+    <PublishRepositoryUrl>true</PublishRepositoryUrl>
+    <IncludeSymbols>true</IncludeSymbols>
+    <SymbolPackageFormat>snupkg</SymbolPackageFormat>
+    <EmbedUntrackedSources>true</EmbedUntrackedSources>
+    <ContinuousIntegrationBuild>true</ContinuousIntegrationBuild>
+    <Deterministic>true</Deterministic>
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="Pairing.fs" />
@@ -10,5 +31,13 @@
     <Compile Include="Countable.fs" />
     <Compile Include="GodelianToolkit.fs" />
     <Compile Include="MetaFSharp.fs" />
+  </ItemGroup>
+  <ItemGroup>
+    <!-- Package the root README.md into the NuGet package -->
+    <None Include="../../README.md" Pack="true" PackagePath="/" Link="README.md" />
+  </ItemGroup>
+  <ItemGroup>
+    <!-- SourceLink for GitHub -->
+    <PackageReference Include="Microsoft.SourceLink.GitHub" Version="8.0.0" PrivateAssets="All" />
   </ItemGroup>
 </Project>
