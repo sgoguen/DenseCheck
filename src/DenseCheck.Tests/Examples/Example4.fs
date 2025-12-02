@@ -61,7 +61,7 @@ module Example4 =
             
     let pickType = getIndex<FsType> ()
     
-    [<Fact(Skip = "Taking too long")>]
+    [<Fact(Skip = "TODO - Fix distinctness issue")>]
     let ``First 1000 types should be distinct`` () =
         let alreadyCreated = new Dictionary<FsType, bigint>()
         for i in 0I..1000I do

@@ -9,6 +9,7 @@ module DenseCheck =
     open System
     open Functions
     open Nat.Mappings
+    open Countable
 
     /// Given an integer and a count, decode the integer into a list of 'count' integers
     let rec decodeParts (n: bigint) (k: int) : bigint list =
@@ -58,27 +59,51 @@ module DenseCheck =
     //     else
     //         failwithf $"Type %A{t} is not supported by the Godelian constructor"
 
-    let infinite<'a> (f: bigint -> 'a) : Countable<'a> =
-        { new Countable<'a> with
-            member _.Decode n = f n
-            member _.IsInfinite = true
-            member _.DomainSize = -1I }
 
-    let finiteCountable<'a> (size: bigint) (f: bigint -> 'a) : Countable<'a> =
-        { new Countable<'a> with
-            member _.Decode n = f n
-            // member _.Encode v = failwith "Not implemented"
-            member _.IsInfinite = false
-            member _.DomainSize = size }
 
     let createCountable (recMake: Type -> Countable<'obj>) (t: Type) : Countable<'obj> =
+        // Helper to box a typed Countable<'a> to Countable<'obj>
+        let boxC (c: Countable<_>) : Countable<'obj> =
+            { new Countable<'obj> with
+                member _.Decode n = box (c.Decode n)
+                member _.IsInfinite = c.IsInfinite
+                member _.DomainSize = c.DomainSize }
+
         if t = typeof<string> then
+            // Keep variable-like strings for readability in generated samples
             infinite <| fun n -> box (toVarName (n))
-        else if t = typeof<int> then
-            finiteCountable (bigint (int System.Int32.MaxValue)) <| fun n -> box (int n)
         elif t = typeof<bool> then
-            // For booleans, we might use even/odd as false/true.
-             finiteCountable 2I <| fun n -> box ((n % 2I) = 0I)
+            boxC Countable.Primitives.forBool
+        elif t = typeof<char> then
+            boxC Countable.Primitives.forChar
+        elif t = typeof<byte> then
+            boxC Countable.Primitives.forByte
+        elif t = typeof<sbyte> then
+            boxC Countable.Primitives.forSByte
+        elif t = typeof<int16> then
+            boxC Countable.Primitives.forInt16
+        elif t = typeof<uint16> then
+            boxC Countable.Primitives.forUInt16
+        elif t = typeof<int> then
+            boxC Countable.Primitives.forInt32
+        elif t = typeof<uint32> then
+            boxC Countable.Primitives.forUInt32
+        elif t = typeof<int64> then
+            boxC Countable.Primitives.forInt64
+        elif t = typeof<uint64> then
+            boxC Countable.Primitives.forUInt64
+        elif t = typeof<nativeint> || t = typeof<IntPtr> then
+            boxC Countable.Primitives.forNativeInt
+        elif t = typeof<unativeint> || t = typeof<UIntPtr> then
+            boxC Countable.Primitives.forUNativeInt
+        elif t = typeof<decimal> then
+            boxC Countable.Primitives.forDecimal
+        elif t = typeof<double> then
+            boxC Countable.Primitives.forDouble
+        elif t = typeof<single> then
+            boxC Countable.Primitives.forSingle
+        elif t = typeof<unit> then
+            boxC Countable.Primitives.forUnit
         elif t = typeof<bigint> then
             infinite <| fun n -> box n
         elif t.IsGenericType && t.GetGenericTypeDefinition() = typedefof<Set<_>> then

@@ -6,12 +6,6 @@ module GodelianTooklit =
 
     // A constructor for an infinite domain
     type InfCtor<'T> = bigint -> 'T
-    
-    type Countable<'T> =
-        abstract member Decode: bigint -> 'T
-        // abstract member Encode: 'T -> bigint
-        abstract member IsInfinite: bool
-        abstract member DomainSize: bigint
 
     type FinCtor<'T> = FindCtor of size: bigint * ctor: (bigint -> 'T)
 

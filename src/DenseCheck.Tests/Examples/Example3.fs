@@ -176,5 +176,5 @@ module Example3 =
         let created = pick bigIndex
         let code = toCode created
         // Print to console for visual inspection
-        printfn "%s" code
+        // printfn "%s" code
         Assert.True(code.Length > 0)
