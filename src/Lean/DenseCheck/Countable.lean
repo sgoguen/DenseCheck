@@ -3,21 +3,28 @@ import Mathlib.Data.Fin.Basic
 
 namespace DenseCheck
 
-/-- A finite type with an explicit computable bijection to `Fin card`. -/
-class FinEncodable (α : Type*) where
-  card   : ℕ
-  encode : α → Fin card
-  decode : Fin card → α
+-- Drop FinEncodable entirely, or keep it as a separate thing
+-- FinDenumerable stands alone with everything it needs
+class FinDenumerable (α : Type*) where
+  card          : ℕ
+  encode        : α → Fin card
+  decode        : Fin card → α
+  encode_decode : ∀ x, decode (encode x) = x
+  decode_encode : ∀ i, encode (decode i) = i
 
-instance : FinEncodable Bool where
-  card   := 2
-  encode := fun b => if b then ⟨1, by omega⟩ else ⟨0, by omega⟩
-  decode := fun n => n.val == 1
+instance : FinDenumerable Bool where
+  card          := 2
+  encode        := fun b => if b then ⟨1, by decide⟩ else ⟨0, by decide⟩
+  decode        := fun n => n.val == 1
+  encode_decode := by decide
+  decode_encode := by decide
 
-example : (FinEncodable.encode (α := Bool) false) = ⟨0, by decide⟩ := by native_decide
-example : (FinEncodable.encode (α := Bool) true)  = ⟨1, by decide⟩ := by native_decide
-example : (FinEncodable.decode (α := Bool) ⟨0, by decide⟩) = false := by native_decide
-example : (FinEncodable.decode (α := Bool) ⟨1, by decide⟩) = true  := by native_decide
+-- encode_decode: round-trip from α → Fin → α gives back the original
+example : FinDenumerable.decode (α := Bool) (FinDenumerable.encode false) = false := by native_decide
+example : FinDenumerable.decode (α := Bool) (FinDenumerable.encode true)  = true  := by native_decide
 
+-- decode_encode: round-trip from Fin → α → Fin gives back the original
+example : FinDenumerable.encode (FinDenumerable.decode (α := Bool) ⟨0, by decide⟩) = ⟨0, by decide⟩ := by native_decide
+example : FinDenumerable.encode (FinDenumerable.decode (α := Bool) ⟨1, by decide⟩) = ⟨1, by decide⟩ := by native_decide
 
 end DenseCheck
