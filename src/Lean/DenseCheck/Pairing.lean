@@ -1,4 +1,5 @@
 import Mathlib.Tactic
+import Mathlib.Data.Nat.Pairing
 
 /-!
 # DenseCheck.Pairing
@@ -8,49 +9,32 @@ ported from the F# DenseCheck library.
 
 ## The pairing function
 
-Given two natural numbers `a` and `b`, we encode them as a single
-natural number using a square-based scheme:
+The square-based `pair`/`unpair` are provided by `Mathlib.Data.Nat.Pairing`
+as `Nat.pair` / `Nat.unpair`. This file re-exports them under the `DenseCheck`
+namespace and adds the bit-interleaving variant.
 
   pair a b = if a < b then b * b + a else a * a + a + b
 
-This creates a bijection ℕ × ℕ → ℕ, enumerating pairs along the
-L-shaped borders of growing squares:
-
   (0,0) (0,1) (1,0) (1,1) (0,2) (1,2) (2,0) (2,1) (2,2) ...
     0     1     2     3     4     5     6     7     8    ...
-
-## Leveraging Mathlib
-
-- Uses `Nat.sqrt` from core Lean (with Mathlib lemmas) instead of hand-rolled isqrt
-- Uses `Nat.testBit` from core for bit-interleaving specification
-- Recursive definitions for `bitPair`/`bitUnpair` to enable inductive proofs
-- `omega`, `simp`, `norm_num` from Mathlib for proof automation
 -/
-
-
 
 namespace DenseCheck
 
 -- ============================================================
--- Square-based pairing (ported from F# MonoPairing)
+-- Square-based pairing: aliases for Mathlib's Nat.pair/unpair
 -- ============================================================
 
 /-- Encode a pair of natural numbers into a single natural number.
-    Uses the square-based pairing: the pair `(a, b)` is mapped to
-    `b² + a` when `a < b`, and `a² + a + b` otherwise. -/
-def pair (a b : Nat) : Nat :=
-  if a < b then b * b + a
-  else a * a + a + b
+    Alias for `Nat.pair` from `Mathlib.Data.Nat.Pairing`. -/
+abbrev pair := Nat.pair
 
 /-- Decode a natural number back into a pair of natural numbers.
-    Inverts `pair`: uses `Nat.sqrt` from core Lean. -/
-def unpair (n : Nat) : Nat × Nat :=
-  let s := Nat.sqrt n
-  if n - s * s < s then (n - s * s, s)
-  else (s, n - s * s - s)
+    Alias for `Nat.unpair` from `Mathlib.Data.Nat.Pairing`. -/
+abbrev unpair := Nat.unpair
 
 -- ============================================================
--- Computational tests (native_decide handles Nat.sqrt reduction)
+-- Computational tests
 -- ============================================================
 
 example : pair 0 0 = 0 := by native_decide
@@ -74,26 +58,21 @@ example : unpair 7 = (2, 1) := by native_decide
 example : unpair 8 = (2, 2) := by native_decide
 
 -- ============================================================
--- Round-trip theorems
--- (Proofs will use Mathlib's Nat.sqrt_le, Nat.lt_succ_sqrt, omega)
+-- Round-trip theorems: direct from Mathlib
 -- ============================================================
 
 /-- Unpairing a paired value returns the original pair. -/
-theorem unpair_pair (a b : Nat) : unpair (pair a b) = (a, b) := by
-  sorry
+theorem unpair_pair (a b : Nat) : unpair (pair a b) = (a, b) :=
+  Nat.unpair_pair a b
 
 /-- Pairing an unpaired value returns the original number. -/
-theorem pair_unpair (n : Nat) : (let p := unpair n; pair p.1 p.2) = n := by
-  sorry
+theorem pair_unpair (n : Nat) : (let p := unpair n; pair p.1 p.2) = n :=
+  Nat.pair_unpair n
 
 /-- `pair` is injective (follows from `unpair_pair`). -/
 theorem pair_injective (a₁ b₁ a₂ b₂ : Nat)
-    (h : pair a₁ b₁ = pair a₂ b₂) : a₁ = a₂ ∧ b₁ = b₂ := by
-  have h1 := unpair_pair a₁ b₁
-  have h2 := unpair_pair a₂ b₂
-  rw [h] at h1
-  rw [h1] at h2
-  exact Prod.mk.inj h2
+    (h : pair a₁ b₁ = pair a₂ b₂) : a₁ = a₂ ∧ b₁ = b₂ :=
+  Nat.pair_eq_pair.mp h
 
 -- ============================================================
 -- Bit-interleaving pairing (from Pairing.fs)
