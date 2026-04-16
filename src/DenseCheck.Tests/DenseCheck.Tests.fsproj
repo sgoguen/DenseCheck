@@ -25,6 +25,6 @@
 
   <ItemGroup>
     <ProjectReference Include="..\DenseCheck\DenseCheck.fsproj" />
-  </ItemGroup>
+  </ItemGroup>d
 
 </Project>

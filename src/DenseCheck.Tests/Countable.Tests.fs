@@ -1,0 +1,2 @@
+module DenseCheck.Tests.Countable
+

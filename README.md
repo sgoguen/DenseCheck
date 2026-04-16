@@ -90,4 +90,3 @@ This is all well and good, but domain models always feel abstract.  It would be 
 
 Instead of using `FsCheck` random generation or property based testing, we can use the Instance Catalog to enumerate all the possible `AccessRule` instances.
 
-```fsharp

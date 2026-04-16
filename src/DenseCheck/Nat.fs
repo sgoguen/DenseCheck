@@ -14,12 +14,13 @@ let sqrt (z: bigint) : bigint =
 
         newtonRaphson z
 
+[<AutoOpen>]
 module MonoPairing =
 
-    let pair (a: Nat) (b: Nat) =
+    let pair (a: Nat) (b: Nat): Nat =
         if a < b then b * b + a else a * a + a + b
 
-    let unpair (n: Nat) =
+    let unpair (n: Nat): Nat * Nat =
         let s = sqrt n
         if n - s * s < s then (n - s * s, s) else (s, n - s * s - s)
 
@@ -31,7 +32,7 @@ module Mappings =
         let (a, b) = nat2pair z
         (a, a + b)
 
-    let pair2ordered (a: bigint, b: bigint) = (a, a + b + 1I)
+    let pair2ordered (a: bigint, b: bigint) : bigint * bigint = (a, a + b + 1I)
 
     let nat2pairWithId (skip: bigint) (z: bigint) : bigint * bigint =
         if z < skip then
