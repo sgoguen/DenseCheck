@@ -5,3 +5,8 @@ DenseCheck is a property-based testing library for F#. It allows you to generate
 This implementation of DenseCheck is in Lean and the point here is to explore 
 the ideas behind DenseCheck in a different language that allows us to prove properties about the implementation itself.
 
+## Building Project from Powershell
+
+```
+lake build
+```

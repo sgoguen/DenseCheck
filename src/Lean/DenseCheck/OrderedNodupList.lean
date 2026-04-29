@@ -170,11 +170,11 @@ lemma expsToNat_ne_zero_of_cons (n : Nat) (ns : List Nat) :
     expsToNat (n :: ns) ≠ 0 := by
   have hpow : 0 < 2 ^ n := by positivity
   intro h
-  have hsum : 0 < (2 ^ n) + expsToNat ns := by omega
+  have hsum : 0 < (2 ^ n) + expsToNat ns := by grind
   have hpos : 0 < expsToNat (n :: ns) := by
     rw [expsToNat]
     exact hsum
-  omega
+  grind
 
 lemma expsToNat_eq_zero_iff (xs : List Nat) :
     expsToNat xs = 0 ↔ xs = [] := by
