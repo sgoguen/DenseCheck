@@ -1,0 +1,7 @@
+includes = ["**/*.dfy"]
+
+target = "go"
+
+[options]
+enforce-determinism = false
+warn-shadowing = true
