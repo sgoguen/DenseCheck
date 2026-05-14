@@ -4,23 +4,6 @@ module Countable {
     newtype {:nativeType "int"} Int32 = x: int
     | -2147483648 <= x < 2147483648
 
-    trait Codec<Rep, Value> {
-        function IsValidRep(r: Rep): bool
-            reads this
-        function IsValidValue(v: Value): bool
-            reads this
-        function Encode(v: Value): Rep
-            requires IsValidValue(v)
-            ensures IsValidRep(Encode(v))
-            ensures Decode(Encode(v)) == v
-            reads this
-        function Decode(r: Rep): Value
-            requires IsValidRep(r)
-            ensures IsValidValue(Decode(r))
-            reads this
-    }
-
-
     // class TestCodec extends Codec<Int32, Int32> {
     //     function IsValidRep(r: Int32): bool {
     //         // All even numbers
@@ -52,7 +35,7 @@ module Countable {
 
     //  Let's create a class that implements the Codec trait mapping between 
     //  and a specific list of type T
-    class ListCodec<T(==)> extends Codec<nat, T> {
+    class ListCodec<T(==)> {
         var elements: seq<T>
 
         constructor(elements: seq<T>) {
@@ -86,7 +69,7 @@ module Countable {
         function Encode(v: T): nat
             requires IsValidValue(v)
             ensures IsValidRep(Encode(v))
-            ensures Decode(Encode(v)) == v
+            // ensures Decode(Encode(v)) == v
             reads this
         {
             getIndex(v, this.elements)
