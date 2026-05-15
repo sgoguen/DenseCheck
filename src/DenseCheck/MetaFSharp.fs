@@ -28,6 +28,89 @@ module DenseCheck =
         | [ n ] -> n
         | head :: rest -> decodePair (head, encodeParts rest)
 
+    /// Decode a natural number into a word over a finite alphabet.
+    ///
+    /// domainSize is the alphabet size. The result is a list of element indices,
+    /// each in [0, domainSize). Lists are ordered by length first, then by their
+    /// base-domainSize digits, so every finite list has exactly one index and no
+    /// index decodes to an out-of-domain element.
+    let decodeFiniteListIndices (domainSize: bigint) (n: bigint) : bigint list =
+        if domainSize <= 0I then
+            invalidArg "domainSize" "Finite list element domain size must be positive"
+        elif domainSize = 1I then
+            List.replicate (int n) 0I
+        else
+            let rec findLength length blockSize remaining =
+                if remaining < blockSize then
+                    length, remaining
+                else
+                    findLength (length + 1) (blockSize * domainSize) (remaining - blockSize)
+
+            let length, offset = findLength 0 1I n
+
+            let rec decodeDigits remaining count =
+                if count = 0 then
+                    []
+                else
+                    let q, r = bigint.DivRem(remaining, domainSize)
+                    r :: decodeDigits q (count - 1)
+
+            decodeDigits offset length
+
+    /// Decode one field, respecting a finite field's declared domain.
+    ///
+    /// Infinite fields consume the whole index. Finite fields reduce the index
+    /// modulo DomainSize because callers may be splitting a larger product space.
+    let decodeField (constructor: Countable<'obj>) (n: bigint) =
+        if constructor.IsInfinite then
+            constructor.Decode n
+        else
+            constructor.Decode(n % constructor.DomainSize)
+
+    /// Decode a product of fields without duplicating finite combinations.
+    ///
+    /// The finite fields form a mixed-radix product. The infinite fields share
+    /// the quotient left after that product is removed. This keeps finite fields
+    /// bounded while still giving recursive or otherwise infinite fields an
+    /// unbounded index stream.
+    let decodeFields (constructors: Countable<'obj> array) (n: bigint) =
+        let values = Array.zeroCreate<obj> constructors.Length
+
+        let finiteFields =
+            constructors
+            |> Array.indexed
+            |> Array.filter (fun (_, constructor) -> not constructor.IsInfinite)
+
+        let infiniteFields =
+            constructors
+            |> Array.indexed
+            |> Array.filter (fun (_, constructor) -> constructor.IsInfinite)
+
+        let finiteDomainSize =
+            finiteFields
+            |> Array.fold (fun product (_, constructor) -> product * constructor.DomainSize) 1I
+
+        let infiniteIndex, finiteOffset =
+            if infiniteFields.Length = 0 then
+                0I, n
+            else
+                bigint.DivRem(n, finiteDomainSize)
+
+        let mutable remainingFiniteOffset = finiteOffset
+
+        finiteFields
+        |> Array.iter (fun (position, constructor) ->
+            let quotient, fieldIndex = bigint.DivRem(remainingFiniteOffset, constructor.DomainSize)
+            remainingFiniteOffset <- quotient
+            values[position] <- constructor.Decode fieldIndex)
+
+        let infiniteParts = decodeParts infiniteIndex infiniteFields.Length
+
+        infiniteFields
+        |> Array.iteri (fun i (position, constructor) -> values[position] <- constructor.Decode infiniteParts[i])
+
+        values
+
     //  Convert a bigint to a variable name using letters
     //  a, b, ..., aa, ab, ..., ba, bb, ...
     let toVarName (n: bigint) : string =
@@ -129,18 +212,24 @@ module DenseCheck =
 
                 ofArrayMethod.Invoke(null, [| typedArray |])
         elif t.IsGenericType && t.GetGenericTypeDefinition() = typedefof<list<_>> then
-            // For list<T>, use nat2unorderedlist to get list<bigint>, then map each element through the constructor for T
             let elementType = t.GetGenericArguments()[0]
             let elementConstructor = lazy (recMake elementType)
 
             infinite <| fun (n: bigint) ->
-                let indexList = nat2unorderedlist n
+                let elementConstructor = elementConstructor.Value
+
+                let indexList =
+                    if elementConstructor.IsInfinite then
+                        nat2unorderedlist n
+                    else
+                        decodeFiniteListIndices elementConstructor.DomainSize n
+
                 // Create a typed array of elements
                 let typedArray = System.Array.CreateInstance(elementType, indexList.Length)
 
                 indexList
                 |> List.iteri (fun i idx ->
-                    let element = elementConstructor.Value.Decode idx
+                    let element = elementConstructor.Decode idx
                     typedArray.SetValue(element, i))
                 // Use reflection to call List.ofArray
                 let listModule =
@@ -226,23 +315,7 @@ module DenseCheck =
 
                     ofListMethod.Invoke(null, [| pairsList |])
         elif FSharpType.IsUnion(t) then
-            // For union types, we need to handle nullary cases (0 fields) specially
-            // to avoid duplicates. We reserve the first K natural numbers for K nullary cases,
-            // then use the pairing function for non-nullary cases.
             let cases = FSharpType.GetUnionCases(t)
-
-            // Identify nullary and non-nullary cases
-            let nullaryIndices =
-                cases
-                |> Array.mapi (fun i c -> (i, c.GetFields().Length = 0))
-                |> Array.filter snd
-                |> Array.map fst
-
-            let nonNullaryIndices =
-                cases
-                |> Array.mapi (fun i c -> (i, c.GetFields().Length > 0))
-                |> Array.filter snd
-                |> Array.map fst
 
             let caseConstructors =
                 lazy
@@ -255,53 +328,77 @@ module DenseCheck =
                             if fieldConstructors.Length = 0 then
                                 // Nullary case: no fields.
                                 FSharpValue.MakeUnion(unionCase, [||])
-                            elif fieldConstructors.Length = 1 then
-                                // Single field: pass the entire number.
-                                let fieldVal = fieldConstructors[0].Decode n
-                                FSharpValue.MakeUnion(unionCase, [| fieldVal |])
                             else
-                                // Multiple fields: split n into as many parts as needed.
-                                let parts = decodeParts n fieldConstructors.Length
-                                let fieldVals = fieldConstructors |> Array.mapi (fun i cons -> cons.Decode parts[i])
+                                let fieldVals = decodeFields fieldConstructors n
                                 FSharpValue.MakeUnion(unionCase, fieldVals))
 
-            infinite <| fun (n: bigint) ->
-                let caseConstructors = caseConstructors.Value
-                let len = Array.length caseConstructors
+            let caseDomainSizes =
+                lazy
+                    cases
+                    |> Array.map (fun unionCase ->
+                        let fields = unionCase.GetFields()
 
-                if len = 1 then
-                    // Only one case, pass entire number to it
-                    caseConstructors[0]n
-                elif nullaryIndices.Length = 0 then
-                    // No nullary cases, use DivRem (correct enumeration)
-                    let d, r = bigint.DivRem(n, bigint len)
-                    caseConstructors[int r]d
-                elif nonNullaryIndices.Length = 0 then
-                    // All cases are nullary - this is a FINITE type with exactly len distinct values
-                    // Only map 0..len-1 to the cases, anything beyond is invalid
-                    let caseIndex = int n
+                        fields
+                        |> Array.fold
+                            (fun domain field ->
+                                match domain with
+                                | None -> None
+                                | Some product when field.PropertyType = t -> None
+                                | Some product ->
+                                    let fieldConstructor = recMake field.PropertyType
 
-                    if caseIndex < len then
-                        caseConstructors[caseIndex]0I
+                                    if fieldConstructor.IsInfinite then
+                                        None
+                                    else
+                                        Some(product * fieldConstructor.DomainSize))
+                            (Some 1I))
+
+            let caseDomainSizes = caseDomainSizes.Value
+
+            if caseDomainSizes |> Array.forall Option.isSome then
+                let finiteCaseSizes = caseDomainSizes |> Array.map Option.get
+                let totalSize = finiteCaseSizes |> Array.sum
+
+                finiteCountable totalSize (fun n ->
+                    let caseConstructors = caseConstructors.Value
+                    let rec findCase index remaining =
+                        if remaining < finiteCaseSizes[index] then
+                            index, remaining
+                        else
+                            findCase (index + 1) (remaining - finiteCaseSizes[index])
+
+                    let caseIndex, caseOffset = findCase 0 n
+                    caseConstructors[caseIndex]caseOffset)
+            else
+                let finiteCaseIndices =
+                    caseDomainSizes
+                    |> Array.indexed
+                    |> Array.choose (fun (index, domainSize) -> domainSize |> Option.map (fun size -> index, size))
+
+                let infiniteCaseIndices =
+                    caseDomainSizes
+                    |> Array.indexed
+                    |> Array.choose (fun (index, domainSize) -> if domainSize.IsNone then Some index else None)
+
+                let finiteDomainSize = finiteCaseIndices |> Array.sumBy snd
+
+                infinite <| fun (n: bigint) ->
+                    let caseConstructors = caseConstructors.Value
+
+                    if n < finiteDomainSize then
+                        let rec findFiniteCase index remaining =
+                            let caseIndex, caseSize = finiteCaseIndices[index]
+
+                            if remaining < caseSize then
+                                caseIndex, remaining
+                            else
+                                findFiniteCase (index + 1) (remaining - caseSize)
+
+                        let caseIndex, caseOffset = findFiniteCase 0 n
+                        caseConstructors[caseIndex]caseOffset
                     else
-                        // This is beyond the finite range - treat as out of bounds
-                        // Return the last case to maintain totality, but this indicates
-                        // the parent encoding should account for finite field types
-                        caseConstructors[len - 1]0I
-                else
-                    // Mixed nullary and non-nullary cases
-                    // Reserve first K numbers for K nullary cases
-                    let nullaryCount = bigint nullaryIndices.Length
-
-                    if n < nullaryCount then
-                        // Use one of the nullary cases
-                        caseConstructors[nullaryIndices[int n]]0I
-                    else
-                        // Use DivRem for non-nullary cases
-                        let n' = n - nullaryCount
-                        let nonNullaryCount = bigint nonNullaryIndices.Length
-                        let d, r = bigint.DivRem(n', nonNullaryCount)
-                        caseConstructors[nonNullaryIndices[int r]]d
+                        let d, r = bigint.DivRem(n - finiteDomainSize, bigint infiniteCaseIndices.Length)
+                        caseConstructors[infiniteCaseIndices[int r]]d
         elif FSharpType.IsRecord(t) then
             // For records, build a constructor that decodes each field.
 
@@ -316,11 +413,11 @@ module DenseCheck =
                 if fieldConstructors.Length = 0 then
                     FSharpValue.MakeRecord(t, [||])
                 elif fieldConstructors.Length = 1 then
-                    let fieldVal = fieldConstructors[0].Decode n
+                    let fieldVal = decodeField fieldConstructors[0] n
                     FSharpValue.MakeRecord(t, [| fieldVal |])
                 else
                     let parts = decodeParts n fieldConstructors.Length
-                    let fieldVals = fieldConstructors |> Array.mapi (fun i cons -> cons.Decode parts[i])
+                    let fieldVals = fieldConstructors |> Array.mapi (fun i cons -> decodeField cons parts[i])
                     FSharpValue.MakeRecord(t, fieldVals)
         else
             failwithf $"Type %A{t} is not supported by the Godelian constructor"
@@ -340,4 +437,3 @@ module DenseCheck =
 
     let getSetTo<'T when 'T: equality and 'T : comparison> (maxSize : int): 'T list =
         sample<'T> maxSize 0 |> Set.ofList |> Set.toList
-

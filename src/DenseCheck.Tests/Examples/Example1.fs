@@ -34,15 +34,15 @@ let ``We can enumerate many items`` () =
     // It will return a list of terms like this:
     let expected =
         [ HasRole Admin
+          HasRole Editor
+          HasRole Viewer
           And(HasRole Admin, HasRole Admin)
           Or(HasRole Admin, HasRole Admin)
           Not(HasRole Admin)
-          HasRole Editor
-          And(HasRole Admin, And(HasRole Admin, HasRole Admin))
-          Or(HasRole Admin, And(HasRole Admin, HasRole Admin))
-          Not(And(HasRole Admin, HasRole Admin))
-          HasRole Viewer
-          And(And(HasRole Admin, HasRole Admin), HasRole Admin) ]
+          And(HasRole Admin, HasRole Editor)
+          Or(HasRole Admin, HasRole Editor)
+          Not(HasRole Editor)
+          And(HasRole Editor, HasRole Admin) ]
 
     Assert.Equal<AccessRule list>(expected, terms)
 
@@ -51,19 +51,29 @@ let ``Let's generate a big instance`` () =
     let bigInstance = getAccessRule 123987123098123987324987234I
 
     let expected =
-        Or(
+        Not(
             Or(
                 Or(
-                    Or(HasRole Editor, Not(HasRole Admin)),
-                    Not(Not(And(Or(HasRole Admin, HasRole Admin), Or(HasRole Admin, HasRole Admin))))
+                    Or(
+                        And(Not(HasRole Admin), Not(HasRole Admin)),
+                        And(Or(HasRole Editor, HasRole Editor), Not(HasRole Editor))
+                    ),
+                    Or(
+                        Not(And(HasRole Viewer, Not(HasRole Editor))),
+                        Not(Or(Or(HasRole Admin, HasRole Admin), Or(HasRole Admin, HasRole Editor)))
+                    )
                 ),
-                Not(Or(Or(Not(And(HasRole Admin, HasRole Admin)), HasRole Editor), HasRole Viewer))
-            ),
-            Or(
-                Not(Or(HasRole Viewer, HasRole Viewer)),
                 Or(
-                    And(And(HasRole Admin, And(HasRole Admin, HasRole Admin)), And(HasRole Admin, HasRole Admin)),
-                    Or(Not(Or(HasRole Admin, HasRole Admin)), And(HasRole Admin, HasRole Admin))
+                    And(
+                        Or(HasRole Viewer, Or(HasRole Editor, HasRole Admin)),
+                        Not(Or(HasRole Editor, Not(HasRole Editor)))
+                    ),
+                    Not(
+                        Or(
+                            And(Or(HasRole Admin, HasRole Editor), Or(HasRole Editor, HasRole Admin)),
+                            And(Or(HasRole Admin, HasRole Admin), And(HasRole Editor, HasRole Admin))
+                        )
+                    )
                 )
             )
         )
