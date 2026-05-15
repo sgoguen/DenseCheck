@@ -11,9 +11,9 @@
     <Compile Include="AutoConstructor.fs" />
     <Compile Include="Countable.fs" />
     <Compile Include="Examples/Example1.fs" />
-    <Compile Include="Examples\Example2.fs" />
-    <Compile Include="Examples\Example3.fs" />
-    <Compile Include="Examples\Example4.fs" />
+    <Compile Include="Examples/Example2.fs" />
+    <Compile Include="Examples/Example3.fs" />
+    <Compile Include="Examples/Example4.fs" />
     <Compile Include="Tests.fs" />
   </ItemGroup>
 
@@ -25,7 +25,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\DenseCheck\DenseCheck.fsproj" />
+    <ProjectReference Include="../DenseCheck/DenseCheck.fsproj" />
   </ItemGroup>
 
 </Project>
