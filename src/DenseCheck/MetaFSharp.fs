@@ -124,6 +124,249 @@ module DenseCheck =
 
         toVarName' n ""
 
+    /// Box a typed countable so reflection-built constructors can share one shape.
+    let boxCountable (c: Countable<_>) : Countable<'obj> =
+        { new Countable<'obj> with
+            member _.Decode n = box (c.Decode n)
+            member _.IsInfinite = c.IsInfinite
+            member _.DomainSize = c.DomainSize }
+
+    let primitiveCountable (t: Type) : Countable<'obj> option =
+        if t = typeof<string> then
+            // Keep variable-like strings for readability in generated samples.
+            Some(infinite <| fun n -> box (toVarName n))
+        elif t = typeof<bool> then
+            Some(boxCountable Countable.Primitives.forBool)
+        elif t = typeof<char> then
+            Some(boxCountable Countable.Primitives.forChar)
+        elif t = typeof<byte> then
+            Some(boxCountable Countable.Primitives.forByte)
+        elif t = typeof<sbyte> then
+            Some(boxCountable Countable.Primitives.forSByte)
+        elif t = typeof<int16> then
+            Some(boxCountable Countable.Primitives.forInt16)
+        elif t = typeof<uint16> then
+            Some(boxCountable Countable.Primitives.forUInt16)
+        elif t = typeof<int> then
+            Some(boxCountable Countable.Primitives.forInt32)
+        elif t = typeof<uint32> then
+            Some(boxCountable Countable.Primitives.forUInt32)
+        elif t = typeof<int64> then
+            Some(boxCountable Countable.Primitives.forInt64)
+        elif t = typeof<uint64> then
+            Some(boxCountable Countable.Primitives.forUInt64)
+        elif t = typeof<nativeint> || t = typeof<IntPtr> then
+            Some(boxCountable Countable.Primitives.forNativeInt)
+        elif t = typeof<unativeint> || t = typeof<UIntPtr> then
+            Some(boxCountable Countable.Primitives.forUNativeInt)
+        elif t = typeof<decimal> then
+            Some(boxCountable Countable.Primitives.forDecimal)
+        elif t = typeof<double> then
+            Some(boxCountable Countable.Primitives.forDouble)
+        elif t = typeof<single> then
+            Some(boxCountable Countable.Primitives.forSingle)
+        elif t = typeof<unit> then
+            Some(boxCountable Countable.Primitives.forUnit)
+        elif t = typeof<bigint> then
+            Some(infinite <| fun n -> box n)
+        else
+            None
+
+    let private makeTypedArray (elementType: Type) (values: obj seq): Array =
+        let values = values |> Seq.toArray
+        let typedArray = System.Array.CreateInstance(elementType, values.Length)
+
+        values
+        |> Array.iteri (fun i value -> typedArray.SetValue(value, i))
+
+        typedArray
+
+    // TODO: Cache module/method reflection lookups for list/set/map builders to reduce per-call overhead.
+    let makeFSharpList (elementType: Type) (values: obj seq) =
+        let listModule =
+            typedefof<list<_>>.Assembly.GetType("Microsoft.FSharp.Collections.ListModule")
+
+        let ofArrayMethod =
+            // TODO: Cache module/method reflection lookups for list/set/map builders to reduce per-call overhead???
+            listModule.GetMethod("OfArray").MakeGenericMethod([| elementType |])
+
+        ofArrayMethod.Invoke(null, [| makeTypedArray elementType values |])
+
+    let makeFSharpSet (elementType: Type) (values: obj seq) =
+        let setModule =
+            typedefof<Set<_>>.Assembly.GetType("Microsoft.FSharp.Collections.SetModule")
+
+        let ofArrayMethod =
+            setModule.GetMethod("OfArray").MakeGenericMethod([| elementType |])
+
+        ofArrayMethod.Invoke(null, [| makeTypedArray elementType values |])
+
+    let makeFSharpMap (keyType: Type) (valueType: Type) (pairs: (obj * obj) seq) =
+        let tupleType = typedefof<_ * _>.MakeGenericType([| keyType; valueType |])
+
+        let pairValues =
+            pairs
+            |> Seq.map (fun (key, value) -> FSharpValue.MakeTuple([| key; value |], tupleType))
+
+        let pairsList = makeFSharpList tupleType pairValues
+
+        let mapModule =
+            typedefof<Map<_, _>>.Assembly.GetType("Microsoft.FSharp.Collections.MapModule")
+
+        let ofListMethod =
+            mapModule.GetMethod("OfList").MakeGenericMethod([| keyType; valueType |])
+
+        ofListMethod.Invoke(null, [| pairsList |])
+
+    let createSetCountable (recMake: Type -> Countable<'obj>) (t: Type) : Countable<'obj> =
+        let elementType = t.GetGenericArguments()[0]
+        let elementConstructor = lazy (recMake elementType)
+
+        infinite <| fun (n: bigint) ->
+            Pairing.nat2Set n
+            |> Seq.map elementConstructor.Value.Decode
+            |> makeFSharpSet elementType
+
+    let createListCountable (recMake: Type -> Countable<'obj>) (t: Type) : Countable<'obj> =
+        let elementType = t.GetGenericArguments()[0]
+        let elementConstructor = lazy (recMake elementType)
+
+        infinite <| fun (n: bigint) ->
+            let elementConstructor = elementConstructor.Value
+
+            let indexList =
+                if elementConstructor.IsInfinite then
+                    nat2unorderedlist n
+                else
+                    decodeFiniteListIndices elementConstructor.DomainSize n
+
+            indexList
+            |> List.map elementConstructor.Decode
+            |> makeFSharpList elementType
+
+    let createMapCountable (recMake: Type -> Countable<'obj>) (t: Type) : Countable<'obj> =
+        let typeArgs = t.GetGenericArguments()
+        let keyType = typeArgs[0]
+        let valueType = typeArgs[1]
+        let keyConstructor = lazy (recMake keyType)
+        let valueConstructor = lazy (recMake valueType)
+
+        infinite <| fun (n: bigint) ->
+            if n = 0I then
+                makeFSharpMap keyType valueType []
+            else
+                // Decode (n - 1) so every non-zero map index has a non-empty key domain.
+                let domainNat, valuesNat = encodePair (n - 1I)
+                let sortedDomainList = Pairing.nat2Set (domainNat + 1I) |> Set.toList |> List.sort
+                let valueIndices = decodeParts valuesNat sortedDomainList.Length
+
+                List.zip sortedDomainList valueIndices
+                |> List.map (fun (keyIdx, valueIdx) ->
+                    keyConstructor.Value.Decode keyIdx, valueConstructor.Value.Decode valueIdx)
+                |> makeFSharpMap keyType valueType
+
+    let private getCaseDomainSize (recMake: Type -> Countable<'obj>) (declaringType: Type) (unionCase: UnionCaseInfo) =
+        unionCase.GetFields()
+        |> Array.fold
+            (fun domain field ->
+                match domain with
+                | None -> None
+                | Some _ when field.PropertyType = declaringType -> None
+                | Some product ->
+                    let fieldConstructor = recMake field.PropertyType
+
+                    if fieldConstructor.IsInfinite then
+                        None
+                    else
+                        Some(product * fieldConstructor.DomainSize))
+            (Some 1I)
+
+    let createUnionCountable (recMake: Type -> Countable<'obj>) (t: Type) : Countable<'obj> =
+        let cases = FSharpType.GetUnionCases(t)
+
+        let caseConstructors =
+            lazy
+                cases
+                |> Array.map (fun unionCase ->
+                    let fields = unionCase.GetFields()
+                    let fieldConstructors = fields |> Array.map (fun f -> recMake f.PropertyType)
+
+                    fun (n: bigint) ->
+                        if fieldConstructors.Length = 0 then
+                            FSharpValue.MakeUnion(unionCase, [||])
+                        else
+                            let fieldVals = decodeFields fieldConstructors n
+                            FSharpValue.MakeUnion(unionCase, fieldVals))
+
+        let caseDomainSizes =
+            cases |> Array.map (getCaseDomainSize recMake t)
+
+        if caseDomainSizes |> Array.forall Option.isSome then
+            let finiteCaseSizes = caseDomainSizes |> Array.map Option.get
+            let totalSize = finiteCaseSizes |> Array.sum
+
+            finiteCountable totalSize (fun n ->
+                let caseConstructors = caseConstructors.Value
+
+                let rec findCase index remaining =
+                    if remaining < finiteCaseSizes[index] then
+                        index, remaining
+                    else
+                        findCase (index + 1) (remaining - finiteCaseSizes[index])
+
+                let caseIndex, caseOffset = findCase 0 n
+                let f = caseConstructors[caseIndex]
+                f caseOffset)
+        else
+            let finiteCaseIndices =
+                caseDomainSizes
+                |> Array.indexed
+                |> Array.choose (fun (index, domainSize) -> domainSize |> Option.map (fun size -> index, size))
+
+            let infiniteCaseIndices =
+                caseDomainSizes
+                |> Array.indexed
+                |> Array.choose (fun (index, domainSize) -> if domainSize.IsNone then Some index else None)
+
+            let finiteDomainSize = finiteCaseIndices |> Array.sumBy snd
+
+            infinite <| fun (n: bigint) ->
+                let caseConstructors = caseConstructors.Value
+
+                if n < finiteDomainSize then
+                    let rec findFiniteCase index remaining =
+                        let caseIndex, caseSize = finiteCaseIndices[index]
+
+                        if remaining < caseSize then
+                            caseIndex, remaining
+                        else
+                            findFiniteCase (index + 1) (remaining - caseSize)
+
+                    let caseIndex, caseOffset = findFiniteCase 0 n
+                    caseConstructors[caseIndex]caseOffset
+                else
+                    let d, r = bigint.DivRem(n - finiteDomainSize, bigint infiniteCaseIndices.Length)
+                    caseConstructors[infiniteCaseIndices[int r]]d
+
+    let createRecordCountable (recMake: Type -> Countable<'obj>) (t: Type) : Countable<'obj> =
+        let fieldConstructors =
+            lazy
+                FSharpType.GetRecordFields(t)
+                |> Array.map (fun f -> recMake f.PropertyType)
+
+        infinite <| fun (n: bigint) ->
+            let fieldConstructors = fieldConstructors.Value
+
+            if fieldConstructors.Length = 0 then
+                FSharpValue.MakeRecord(t, [||])
+            elif fieldConstructors.Length = 1 then
+                let fieldVal = decodeField fieldConstructors[0] n
+                FSharpValue.MakeRecord(t, [| fieldVal |])
+            else
+                let parts = decodeParts n fieldConstructors.Length
+                let fieldVals = fieldConstructors |> Array.mapi (fun i cons -> decodeField cons parts[i])
+                FSharpValue.MakeRecord(t, fieldVals)
+
     // let (|Primitive|Set|List|Map|Union|Record|) (t:Type) =
     //     if t = typeof<string> then
     //         Primitive(t)
@@ -145,281 +388,19 @@ module DenseCheck =
 
 
     let createCountable (recMake: Type -> Countable<'obj>) (t: Type) : Countable<'obj> =
-        // Helper to box a typed Countable<'a> to Countable<'obj>
-        let boxC (c: Countable<_>) : Countable<'obj> =
-            { new Countable<'obj> with
-                member _.Decode n = box (c.Decode n)
-                member _.IsInfinite = c.IsInfinite
-                member _.DomainSize = c.DomainSize }
-
-        if t = typeof<string> then
-            // Keep variable-like strings for readability in generated samples
-            infinite <| fun n -> box (toVarName (n))
-        elif t = typeof<bool> then
-            boxC Countable.Primitives.forBool
-        elif t = typeof<char> then
-            boxC Countable.Primitives.forChar
-        elif t = typeof<byte> then
-            boxC Countable.Primitives.forByte
-        elif t = typeof<sbyte> then
-            boxC Countable.Primitives.forSByte
-        elif t = typeof<int16> then
-            boxC Countable.Primitives.forInt16
-        elif t = typeof<uint16> then
-            boxC Countable.Primitives.forUInt16
-        elif t = typeof<int> then
-            boxC Countable.Primitives.forInt32
-        elif t = typeof<uint32> then
-            boxC Countable.Primitives.forUInt32
-        elif t = typeof<int64> then
-            boxC Countable.Primitives.forInt64
-        elif t = typeof<uint64> then
-            boxC Countable.Primitives.forUInt64
-        elif t = typeof<nativeint> || t = typeof<IntPtr> then
-            boxC Countable.Primitives.forNativeInt
-        elif t = typeof<unativeint> || t = typeof<UIntPtr> then
-            boxC Countable.Primitives.forUNativeInt
-        elif t = typeof<decimal> then
-            boxC Countable.Primitives.forDecimal
-        elif t = typeof<double> then
-            boxC Countable.Primitives.forDouble
-        elif t = typeof<single> then
-            boxC Countable.Primitives.forSingle
-        elif t = typeof<unit> then
-            boxC Countable.Primitives.forUnit
-        elif t = typeof<bigint> then
-            infinite <| fun n -> box n
-        elif t.IsGenericType && t.GetGenericTypeDefinition() = typedefof<Set<_>> then
-            // For Set<T>, use nat2set to get Set<bigint>, then map each element through the constructor for T
-            let elementType = t.GetGenericArguments()[0]
-            let elementConstructor = lazy (recMake elementType)
-
-            infinite <| fun (n: bigint) ->
-                let indexSet = Pairing.nat2Set n
-                // Create a typed array of elements
-                let typedArray = System.Array.CreateInstance(elementType, indexSet.Count)
-
-                indexSet
-                |> Seq.iteri (fun i idx ->
-                    let element = elementConstructor.Value.Decode idx
-                    typedArray.SetValue(element, i))
-                // Use reflection to call Set.ofArray
-                let setType =
-                    typedefof<Set<_>>.Assembly.GetType("Microsoft.FSharp.Collections.SetModule")
-
-                let ofArrayMethod =
-                    setType.GetMethod("OfArray").MakeGenericMethod([| elementType |])
-
-                ofArrayMethod.Invoke(null, [| typedArray |])
-        elif t.IsGenericType && t.GetGenericTypeDefinition() = typedefof<list<_>> then
-            let elementType = t.GetGenericArguments()[0]
-            let elementConstructor = lazy (recMake elementType)
-
-            infinite <| fun (n: bigint) ->
-                let elementConstructor = elementConstructor.Value
-
-                let indexList =
-                    if elementConstructor.IsInfinite then
-                        nat2unorderedlist n
-                    else
-                        decodeFiniteListIndices elementConstructor.DomainSize n
-
-                // Create a typed array of elements
-                let typedArray = System.Array.CreateInstance(elementType, indexList.Length)
-
-                indexList
-                |> List.iteri (fun i idx ->
-                    let element = elementConstructor.Decode idx
-                    typedArray.SetValue(element, i))
-                // Use reflection to call List.ofArray
-                let listModule =
-                    typedefof<list<_>>.Assembly.GetType("Microsoft.FSharp.Collections.ListModule")
-
-                let ofArrayMethod =
-                    listModule.GetMethod("OfArray").MakeGenericMethod([| elementType |])
-
-                ofArrayMethod.Invoke(null, [| typedArray |])
-        elif t.IsGenericType && t.GetGenericTypeDefinition() = typedefof<Map<_, _>> then
-            // For Map<K,V>:
-            // 1. Split n into (domainNat, valuesNat) via pairing
-            // 2. Decode domain as Set<bigint> (key indices)
-            // 3. Decode values as List<bigint> using decodeParts
-            // 4. Zip keys and values together into Map
-            let typeArgs = t.GetGenericArguments()
-            let keyType = typeArgs[0]
-            let valueType = typeArgs[1]
-            let keyConstructor = lazy (recMake keyType)
-            let valueConstructor = lazy (recMake valueType)
-
-            infinite <| fun (n: bigint) ->
-                // Special case: n=0 maps to empty map
-                if n = 0I then
-                    let mapModule =
-                        typedefof<Map<_, _>>.Assembly.GetType("Microsoft.FSharp.Collections.MapModule")
-
-                    let ofListMethod =
-                        mapModule.GetMethod("OfList").MakeGenericMethod([| keyType; valueType |])
-
-                    let emptyList =
-                        let tupleType = typedefof<_ * _>.MakeGenericType([| keyType; valueType |])
-                        let listType = typedefof<list<_>>.MakeGenericType([| tupleType |])
-                        FSharpValue.MakeUnion(FSharpType.GetUnionCases(listType)[0], [||]) // Empty list
-
-                    ofListMethod.Invoke(null, [| emptyList |])
-                else
-                    // For n > 0: decode (n-1) to ensure domainNat > 0 for non-empty maps
-                    let domainNat, valuesNat = encodePair (n - 1I)
-                    let domainSet = Pairing.nat2Set (domainNat + 1I) // Ensure at least one key
-                    let sortedDomainList = domainSet |> Set.toList |> List.sort
-                    let size = List.length sortedDomainList
-                    let valueIndices = decodeParts valuesNat size
-
-                    // Create arrays for keys and values
-                    let keysArray = System.Array.CreateInstance(keyType, size)
-                    let valuesArray = System.Array.CreateInstance(valueType, size)
-
-                    sortedDomainList
-                    |> List.iteri (fun i keyIdx ->
-                        let key = keyConstructor.Value.Decode keyIdx
-                        keysArray.SetValue(key, i))
-
-                    valueIndices
-                    |> List.iteri (fun i valueIdx ->
-                        let value = valueConstructor.Value.Decode valueIdx
-                        valuesArray.SetValue(value, i))
-
-                    // Create typed array of tuples
-                    let tupleType = typedefof<_ * _>.MakeGenericType([| keyType; valueType |])
-                    let tuplesArray = System.Array.CreateInstance(tupleType, size)
-
-                    for i in 0 .. size - 1 do
-                        let key = keysArray.GetValue(i)
-                        let value = valuesArray.GetValue(i)
-                        let tuple = FSharpValue.MakeTuple([| key; value |], tupleType)
-                        tuplesArray.SetValue(tuple, i)
-
-                    // Convert array to list, then to Map
-                    let listModule =
-                        typedefof<list<_>>.Assembly.GetType("Microsoft.FSharp.Collections.ListModule")
-
-                    let ofArrayMethod =
-                        listModule.GetMethod("OfArray").MakeGenericMethod([| tupleType |])
-
-                    let pairsList = ofArrayMethod.Invoke(null, [| tuplesArray |])
-
-                    let mapModule =
-                        typedefof<Map<_, _>>.Assembly.GetType("Microsoft.FSharp.Collections.MapModule")
-
-                    let ofListMethod =
-                        mapModule.GetMethod("OfList").MakeGenericMethod([| keyType; valueType |])
-
-                    ofListMethod.Invoke(null, [| pairsList |])
-        elif FSharpType.IsUnion(t) then
-            let cases = FSharpType.GetUnionCases(t)
-
-            let caseConstructors =
-                lazy
-                    cases
-                    |> Array.map (fun unionCase ->
-                        let fields = unionCase.GetFields()
-                        let fieldConstructors = fields |> Array.map (fun f -> recMake f.PropertyType)
-
-                        fun (n: bigint) ->
-                            if fieldConstructors.Length = 0 then
-                                // Nullary case: no fields.
-                                FSharpValue.MakeUnion(unionCase, [||])
-                            else
-                                let fieldVals = decodeFields fieldConstructors n
-                                FSharpValue.MakeUnion(unionCase, fieldVals))
-
-            let caseDomainSizes =
-                lazy
-                    cases
-                    |> Array.map (fun unionCase ->
-                        let fields = unionCase.GetFields()
-
-                        fields
-                        |> Array.fold
-                            (fun domain field ->
-                                match domain with
-                                | None -> None
-                                | Some product when field.PropertyType = t -> None
-                                | Some product ->
-                                    let fieldConstructor = recMake field.PropertyType
-
-                                    if fieldConstructor.IsInfinite then
-                                        None
-                                    else
-                                        Some(product * fieldConstructor.DomainSize))
-                            (Some 1I))
-
-            let caseDomainSizes = caseDomainSizes.Value
-
-            if caseDomainSizes |> Array.forall Option.isSome then
-                let finiteCaseSizes = caseDomainSizes |> Array.map Option.get
-                let totalSize = finiteCaseSizes |> Array.sum
-
-                finiteCountable totalSize (fun n ->
-                    let caseConstructors = caseConstructors.Value
-                    let rec findCase index remaining =
-                        if remaining < finiteCaseSizes[index] then
-                            index, remaining
-                        else
-                            findCase (index + 1) (remaining - finiteCaseSizes[index])
-
-                    let caseIndex, caseOffset = findCase 0 n
-                    caseConstructors[caseIndex]caseOffset)
-            else
-                let finiteCaseIndices =
-                    caseDomainSizes
-                    |> Array.indexed
-                    |> Array.choose (fun (index, domainSize) -> domainSize |> Option.map (fun size -> index, size))
-
-                let infiniteCaseIndices =
-                    caseDomainSizes
-                    |> Array.indexed
-                    |> Array.choose (fun (index, domainSize) -> if domainSize.IsNone then Some index else None)
-
-                let finiteDomainSize = finiteCaseIndices |> Array.sumBy snd
-
-                infinite <| fun (n: bigint) ->
-                    let caseConstructors = caseConstructors.Value
-
-                    if n < finiteDomainSize then
-                        let rec findFiniteCase index remaining =
-                            let caseIndex, caseSize = finiteCaseIndices[index]
-
-                            if remaining < caseSize then
-                                caseIndex, remaining
-                            else
-                                findFiniteCase (index + 1) (remaining - caseSize)
-
-                        let caseIndex, caseOffset = findFiniteCase 0 n
-                        caseConstructors[caseIndex]caseOffset
-                    else
-                        let d, r = bigint.DivRem(n - finiteDomainSize, bigint infiniteCaseIndices.Length)
-                        caseConstructors[infiniteCaseIndices[int r]]d
-        elif FSharpType.IsRecord(t) then
-            // For records, build a constructor that decodes each field.
-
-            let fieldConstructors =
-                lazy
-                    let fields = FSharpType.GetRecordFields(t)
-                    fields |> Array.map (fun f -> recMake f.PropertyType)
-
-            infinite <| fun (n: bigint) ->
-                let fieldConstructors = fieldConstructors.Value
-
-                if fieldConstructors.Length = 0 then
-                    FSharpValue.MakeRecord(t, [||])
-                elif fieldConstructors.Length = 1 then
-                    let fieldVal = decodeField fieldConstructors[0] n
-                    FSharpValue.MakeRecord(t, [| fieldVal |])
-                else
-                    let parts = decodeParts n fieldConstructors.Length
-                    let fieldVals = fieldConstructors |> Array.mapi (fun i cons -> decodeField cons parts[i])
-                    FSharpValue.MakeRecord(t, fieldVals)
-        else
+        match primitiveCountable t with
+        | Some constructor -> constructor
+        | None when t.IsGenericType && t.GetGenericTypeDefinition() = typedefof<Set<_>> ->
+            createSetCountable recMake t
+        | None when t.IsGenericType && t.GetGenericTypeDefinition() = typedefof<list<_>> ->
+            createListCountable recMake t
+        | None when t.IsGenericType && t.GetGenericTypeDefinition() = typedefof<Map<_, _>> ->
+            createMapCountable recMake t
+        | None when FSharpType.IsUnion(t) ->
+            createUnionCountable recMake t
+        | None when FSharpType.IsRecord(t) ->
+            createRecordCountable recMake t
+        | None ->
             failwithf $"Type %A{t} is not supported by the Godelian constructor"
 
     let makeConstructor = memoizeRec createCountable

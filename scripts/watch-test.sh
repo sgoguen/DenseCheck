@@ -1,0 +1,1 @@
+dotnet watch --project src/DenseCheck.Tests/DenseCheck.Tests.fsproj test

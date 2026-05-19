@@ -1,0 +1,1 @@
+dotnet test src/DenseCheck.Tests/DenseCheck.Tests.fsproj
