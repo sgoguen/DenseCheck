@@ -1,0 +1,6 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/DenseCheck.Tests/DenseCheck.Tests.fsproj" />
+    <Project Path="src/DenseCheck/DenseCheck.fsproj" />
+  </Folder>
+</Solution>

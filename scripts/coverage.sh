@@ -8,8 +8,8 @@ RESULTS_DIR=${COVERAGE_RESULTS_DIR:-TestResults/Coverage}
 REPORT_DIR=${COVERAGE_REPORT_DIR:-TestResults/CoverageReport}
 TEST_PROJECT=src/DenseCheck.Tests/DenseCheck.Tests.fsproj
 
-echo "Restoring DenseCheck.sln..."
-dotnet restore DenseCheck.sln
+echo "Restoring DenseCheck.slnx..."
+dotnet restore DenseCheck.slnx
 
 echo "Building DenseCheck.Tests..."
 dotnet build "$TEST_PROJECT" \

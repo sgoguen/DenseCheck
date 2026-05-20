@@ -4,8 +4,8 @@ set -eu
 # curl https://api.nuget.org/v3/index.json | wc
 
 echo "Restoring, building, and testing DenseCheck..."
-dotnet restore DenseCheck.sln
-echo "Restored DenseCheck.sln"
+dotnet restore DenseCheck.slnx
+echo "Restored DenseCheck.slnx"
 
 echo "Building and testing DenseCheck.Tests..."
 dotnet build src/DenseCheck.Tests/DenseCheck.Tests.fsproj --configuration Release --no-restore --disable-build-servers
