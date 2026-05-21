@@ -1,24 +1,92 @@
 namespace DenseCheck
 
-type Countable<'T> =
+[<AbstractClass>]
+type Countable<'T>() =
     abstract member Decode: bigint -> 'T
     // abstract member Encode: 'T -> bigint
     abstract member IsInfinite: bool
     abstract member DomainSize: bigint
 
-module Countable = 
-    let infinite<'a> (f: bigint -> 'a) : Countable<'a> =
-        { new Countable<'a> with
-            member _.Decode n = f n
-            member _.IsInfinite = true
-            member _.DomainSize = -1I }
+type BoxedCountable<'T>(inner: Countable<'T>) =
+    inherit Countable<obj>()
+    override _.Decode n = box (inner.Decode n)
+    override _.IsInfinite = inner.IsInfinite
+    override _.DomainSize = inner.DomainSize
 
-    let finiteCountable<'a> (size: bigint) (f: bigint -> 'a) : Countable<'a> =
-        { new Countable<'a> with
-            member _.Decode n = f n
-            // member _.Encode v = failwith "Not implemented"
-            member _.IsInfinite = false
-            member _.DomainSize = size }
+
+type InfiniteCountable<'T>(decode: bigint -> 'T) =
+    inherit Countable<'T>()
+    override _.Decode n = decode n
+    override _.IsInfinite = true
+    override _.DomainSize = -1I
+
+type FiniteCountable<'T>(size: bigint, decode: bigint -> 'T) =
+    inherit Countable<'T>()
+    override _.Decode n = decode n
+    override _.IsInfinite = false
+    override _.DomainSize = size
+
+
+module Countable = 
+    let boxCountable<'T> (c: Countable<'T>) : Countable<'obj> = BoxedCountable<'T>(c) :> Countable<obj>
+    let infinite<'a> (f: bigint -> 'a) : Countable<'a> = InfiniteCountable(f)
+
+    let finiteCountable<'a> (size: bigint) (f: bigint -> 'a) : Countable<'a> = FiniteCountable(size, f)
+
+    let toList (countable: Countable<'a>) : Countable<'a list> =
+        if countable.IsInfinite then
+            infinite (fun n ->
+                let rec decodeList n =
+                    if n = 0I then
+                        []
+                    else
+                        let head = countable.Decode((n - 1I) % countable.DomainSize)
+                        let tail = decodeList ((n - 1I) / countable.DomainSize)
+                        head :: tail
+
+                decodeList n)
+        else
+            let size = countable.DomainSize
+            let rec decodeList n =
+                if n = 0I then
+                    []
+                else
+                    let head = countable.Decode((n - 1I) % size)
+                    let tail = decodeList ((n - 1I) / size)
+                    head :: tail
+            infinite (decodeList)
+
+    // let toSet (countable: Countable<'a>) : Countable<'a list> =
+    //     if countable.IsInfinite then
+    //         infinite (fun n ->
+    //             let rec decodeSet n acc =
+    //                 if n = 0I then
+    //                     List.rev acc
+    //                 else
+    //                     let elem = countable.Decode((n - 1I) % countable.DomainSize)
+    //                     let newAcc = if List.contains elem acc then acc else elem :: acc
+    //                     decodeSet ((n - 1I) / countable.DomainSize) newAcc
+
+    //             decodeSet n [])
+    //     else
+    //         let size = countable.DomainSize
+    //         let newSize = Nat.fact size
+    //         finiteCountable newSize (fun n ->
+    //             let rec decodeSet n acc =
+    //                 if n = 0I then
+    //                     List.rev acc
+    //                 else
+    //                     let elem = countable.Decode((n - 1I) % size)
+    //                     let newAcc = if List.contains elem acc then acc else elem :: acc
+    //                     decodeSet ((n - 1I) / size) newAcc
+
+    //             decodeSet n [])
+
+    let getPage (countable: Countable<'a>) (pageSize: bigint) (pageIndex: bigint) : 'a list =
+        let start = pageIndex * pageSize
+        let endExclusive = start + pageSize
+        let endExclusive = if countable.IsInfinite then endExclusive else min endExclusive countable.DomainSize
+        [ for n in start .. endExclusive - 1I -> countable.Decode n ]
         
     module Primitives =
         let forByte = finiteCountable 256I (byte)

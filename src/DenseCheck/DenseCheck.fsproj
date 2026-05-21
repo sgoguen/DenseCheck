@@ -28,6 +28,7 @@
     <Compile Include="Pairing.fs" />
     <Compile Include="Functions.fs" />
     <Compile Include="Nat.fs" />
+    <Compile Include="Countable.fsi" />
     <Compile Include="Countable.fs" />
     <Compile Include="GodelianToolkit.fs" />
     <Compile Include="MetaFSharp.fs" />

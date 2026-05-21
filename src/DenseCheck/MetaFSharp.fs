@@ -124,12 +124,9 @@ module DenseCheck =
 
         toVarName' n ""
 
+
     /// Box a typed countable so reflection-built constructors can share one shape.
-    let boxCountable (c: Countable<_>) : Countable<'obj> =
-        { new Countable<'obj> with
-            member _.Decode n = box (c.Decode n)
-            member _.IsInfinite = c.IsInfinite
-            member _.DomainSize = c.DomainSize }
+    let boxCountable (c: Countable<'T>) : Countable<'obj> = Countable.boxCountable c
 
     let primitiveCountable (t: Type) : Countable<'obj> option =
         if t = typeof<string> then
@@ -366,26 +363,6 @@ module DenseCheck =
                 let parts = decodeParts n fieldConstructors.Length
                 let fieldVals = fieldConstructors |> Array.mapi (fun i cons -> decodeField cons parts[i])
                 FSharpValue.MakeRecord(t, fieldVals)
-
-    // let (|Primitive|Set|List|Map|Union|Record|) (t:Type) =
-    //     if t = typeof<string> then
-    //         Primitive(t)
-    //     elif t.IsGenericType && t.GetGenericTypeDefinition() = typedefof<Set<_>> then
-    //         let elementType = t.GetGenericArguments()[0]
-    //         let elementConstructor = lazy (recMake elementType)            
-    //         Set(t)
-    //     elif t.IsGenericType && t.GetGenericTypeDefinition() = typedefof<list<_>> then
-    //         List(t)
-    //     elif t.IsGenericType && t.GetGenericTypeDefinition() = typedefof<Map<_, _>> then
-    //         Map(t)
-    //     elif FSharpType.IsUnion(t) then
-    //         Union(t)
-    //     elif FSharpType.IsRecord(t) then
-    //         Record(t)
-    //     else
-    //         failwithf $"Type %A{t} is not supported by the Godelian constructor"
-
-
 
     let createCountable (recMake: Type -> Countable<'obj>) (t: Type) : Countable<'obj> =
         match primitiveCountable t with

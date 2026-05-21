@@ -14,6 +14,13 @@ let sqrt (z: bigint) : bigint =
 
         newtonRaphson z
 
+let fact (n: Nat) : Nat =
+    let rec loop acc n =
+        if n <= 1I then acc
+        else loop (acc * n) (n - 1I)
+
+    loop 1I n
+
 module MonoPairing =
 
     let pair (a: Nat) (b: Nat) =
