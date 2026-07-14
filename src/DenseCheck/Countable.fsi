@@ -14,7 +14,7 @@ module Countable =
     val finiteCountable: bigint -> (bigint -> 'a) -> Countable<'a>
 
     val toList: Countable<'a> -> Countable<'a list>
-    // val toSet: Countable<'a> -> Countable<'a list>
+    val toSet: Countable<'a> -> Countable<'a Set> when 'a: equality
 
     val getPage : Countable<'a> -> bigint -> bigint -> 'a list
     

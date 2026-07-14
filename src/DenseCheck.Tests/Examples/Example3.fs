@@ -12,10 +12,10 @@ module Example3 =
         | Variable of int (* a variable *)
         | Numeral of int (* integer constant *)
         | Plus of expression * expression (* addition [e1 + e2] *)
-    //| Minus of expression * expression (* difference [e1 - e2] *)
-    //| Times of expression * expression (* product [e1 * e2] *)
-    //| Divide of expression * expression (* quotient [e1 / e2] *)
-    //| Remainder of expression * expression (* remainder [e1 % e2] *)
+        | Minus of expression * expression (* difference [e1 - e2] *)
+        | Times of expression * expression (* product [e1 * e2] *)
+        | Divide of expression * expression (* quotient [e1 / e2] *)
+        | Remainder of expression * expression (* remainder [e1 % e2] *)
 
     type boolean =
         | True (* constant [true] *)
@@ -43,7 +43,7 @@ module Example3 =
         | Assign(var, expr) ->
             p.Print(var)
             p.Print(" = ")
-            printExpression expr p
+            printExpression p expr
             p.Print(";")
         | Sequence(c1, c2) ->
             printCommand p c1
@@ -76,27 +76,26 @@ module Example3 =
             p.PrintNewLine()
             p.Print("}")
 
-    and printExpression (e: expression) (p: Printer.Printer) : unit =
+    and printExpression (p: Printer.Printer) (e: expression)  : unit =
         match e with
         | Variable v -> p.Print(sprintf "x%d" v)
         | Numeral n -> p.Print(sprintf "%d" n)
-        | Plus(e1, e2) ->
-            printExpression e1 p
-            p.Print(" + ")
-            printExpression e2 p
+        | Plus(e1, e2) -> printBinaryOp p e1 e2 " + "
+        | Minus(e1, e2) -> printBinaryOp p e1 e2 " - "
+        | Times(e1, e2) -> printBinaryOp p e1 e2 " * "
+        | Divide(e1, e2) -> printBinaryOp p e1 e2 " / "
+        | Remainder(e1, e2) -> printBinaryOp p e1 e2 " % "
+    and printBinaryOp (p: Printer.Printer) (e1: expression) (e2: expression) (op: string) : unit =
+        printExpression p e1
+        p.Print(op)
+        printExpression p e2
 
     and printBoolean (b: boolean) (p: Printer.Printer) : unit =
         match b with
         | True -> p.Print("true")
         | False -> p.Print("false")
-        | Equal(e1, e2) ->
-            printExpression e1 p
-            p.Print(" == ")
-            printExpression e2 p
-        | Less(e1, e2) ->
-            printExpression e1 p
-            p.Print(" < ")
-            printExpression e2 p
+        | Equal(e1, e2) -> printBinaryOp p e1 e2 " == "
+        | Less(e1, e2) -> printBinaryOp p e1 e2 " < "
         | And(bs) ->
             let first = ref true
             p.Print("(")

@@ -26,39 +26,43 @@ let sampleSize = 100
 let inline distinctCheck<'T when 'T: equality> sampleSize =
     let values = DenseCheck.sample<'T> sampleSize 0
     let distinctCount = values |> List.distinct |> List.length
-    Assert.True((distinctCount = sampleSize), $"Expected at least {sampleSize * 9 / 10} distinct values, but got {distinctCount}.")
+
+    Assert.True(
+        (distinctCount = sampleSize),
+        $"Expected at least {sampleSize * 9 / 10} distinct values, but got {distinctCount}."
+    )
 
 [<Fact>]
-let ``Boolean lists do not repeat in the first large sample`` () =
-    let count = DenseCheck.sample<bool list> sampleSize 0 |> List.distinct |> List.length
-    Assert.True((count = sampleSize), $"Expected {sampleSize} distinct values, but got {count}.")
+let ``Boolean lists do not repeat in the first large sample`` () = distinctCheck<bool list> sampleSize
 
 [<Fact>]
-let ``Enum-like union lists do not repeat in the first large sample`` () =
-    let count = DenseCheck.sample<Color list> sampleSize 0 |> List.distinct |> List.length
-    Assert.True((count = sampleSize), $"Expected {sampleSize} distinct values, but got {count}.")
+let ``Enum-like union lists do not repeat in the first large sample`` () = distinctCheck<Color list> sampleSize
+// let count = DenseCheck.sample<Color list> sampleSize 0 |> List.distinct |> List.length
+// Assert.True((count = sampleSize), $"Expected {sampleSize} distinct values, but got {count}.")
 
 [<Fact>]
 let ``Recursive boolean expressions do not repeat in the first large sample`` () =
-    let count = DenseCheck.sample<BoolExpression> sampleSize 0 |> List.distinct |> List.length
-    Assert.True((count = sampleSize), $"Expected {sampleSize} distinct values, but got {count}.")
+    distinctCheck<BoolExpression> sampleSize
 
 [<Fact>]
 let ``Recursive color expressions do not repeat in the first large sample`` () =
-    let count = DenseCheck.sample<ColorExpression> sampleSize 0 |> List.distinct |> List.length
-    Assert.True((count = sampleSize), $"Expected {sampleSize} distinct values, but got {count}.")
+    distinctCheck<ColorExpression> sampleSize
+
+[<Fact>]
+let ``Set of bigints do not repeat in the first large sample`` () = distinctCheck<bigint Set> sampleSize
+
+[<Fact>]
+let ``Boolean Tests`` () = distinctCheck<bool list> sampleSize
 
 // [<Fact>]
-// let ``Lists of lists of booleans do not repeat in the first large sample`` () =
-//     let constr = DenseCheck.makeConstructor (typeof<bool Set>)
-    
+// let ``Boolean Sets``() =
+//     distinctCheck<bool Set> sampleSize
+
+
 
 [<Fact>]
-let ``Set of bigints do not repeat in the first large sample`` () =
-    let count = DenseCheck.sample<bigint Set> sampleSize 0 |> List.distinct |> List.length
-    Assert.True((count = sampleSize), $"Expected {sampleSize} distinct values, but got {count}.")
-
-[<Fact>]
-let ``Boolean Tests``() = 
-    let boolList = Countable.Primitives.forBool |> Countable.toList
-    Assert.True(boolList.IsInfinite, "Expected the countable for bool list to be infinite.")
+let ``Boolean Sets Size`` () =
+    let bools = Countable.Primitives.forBool
+    Assert.Equal(2I, bools.DomainSize)
+    let boolSets = Countable.toSet bools
+    Assert.Equal(4I, boolSets.DomainSize)
