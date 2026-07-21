@@ -1,0 +1,5 @@
+{
+  "dependencies": {
+    "bignumber.js": "^11.1.5"
+  }
+}

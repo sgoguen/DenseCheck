@@ -1,0 +1,14 @@
+node_modules/
+*.exe
+*.dll
+*.pdb
+*.deps.json
+*.runtimeconfig.json
+
+*.cs
+*.csproj
+
+Lambdas-cs/
+Lambdas-py/
+Lambdas-rust/
+Lambdas-go/
