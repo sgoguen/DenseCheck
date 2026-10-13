@@ -45,7 +45,7 @@ Start with a domain model like this simple role based access control system:
 ### 3. Enumerate the first 10 instances
 
 ```fsharp
-    let terms = [ for i in 0I .. 29I -> getAccessRule i ]
+    let terms = [ for i in 0I .. 9I -> getAccessRule i ]
 
     // It will return a list of terms like this:
     let expected =
@@ -88,6 +88,52 @@ Start with a domain model like this simple role based access control system:
 
 This is all well and good, but domain models always feel abstract.  It would be nice if we could quickly generate some concrete examples of our `AccessRule` to see what sorts of scenarios our model allows.
 
-Instead of using `FsCheck` random generation or property based testing, we can use the Instance Catalog to enumerate all the possible `AccessRule` instances.
+Once values are indexable, we can state a property about their behavior and check them in order. Here is a deliberately buggy evaluator: its `Not` case forgets to negate the result.
+
+To run the snippets in this section as one F# script, put `#r "nuget: DenseCheck, 0.1.0"` at the top, then paste the definitions above together with this code and run `dotnet fsi AccessRule.fsx`.
 
 ```fsharp
+let roles = Set.empty<Role>
+
+let rec evaluate (roles: Set<Role>) (rule: AccessRule) =
+    match rule with
+    | HasRole role -> Set.contains role roles
+    | And (left, right) -> evaluate roles left && evaluate roles right
+    | Or (left, right) -> evaluate roles left || evaluate roles right
+    | Not rule -> evaluate roles rule // Bug: this should negate the result.
+
+let negationIsComplement rule =
+    let expected = not (evaluate roles rule)
+    let actual = evaluate roles (Not rule)
+    actual = expected
+
+let firstFailure =
+    [ 0I .. 1000I ]
+    |> List.tryPick (fun index ->
+        let rule = getAccessRule index
+        if negationIsComplement rule then
+            None
+        else
+            let expected = not (evaluate roles rule)
+            let actual = evaluate roles (Not rule)
+            Some (index, rule, expected, actual))
+
+match firstFailure with
+| Some (index, rule, expected, actual) ->
+    printfn "First failure at candidate index %A: Not (%A)" index rule
+    printfn "Expected %b; got %b" expected actual
+| None ->
+    printfn "No failure in the first 1001 candidates"
+```
+
+Output:
+
+```text
+First failure at candidate index 0: Not (HasRole Admin)
+Expected true; got false
+```
+
+The property says that negating a rule must flip its Boolean result. DenseCheck supplies candidate rules in index order: index `0` is `HasRole Admin`, so that first candidate exposes the bug for an empty role set. The failing expression is `Not (HasRole Admin)`; it is also AccessRule index `3` in the catalog shown above. The scan checks every smaller candidate before reporting a failure, so this is the first counterexample in the tested prefix. AccessRule is infinite, so checking indices `0` through `1000` does not prove the property for every rule.
+
+The fix is one line: change the `Not` case to `| Not rule -> not (evaluate roles rule)`.
+
